@@ -1,0 +1,552 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChurnGuard AI - Predictive Customer Retention Intelligence</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/dashboard.css' %}">
+</head>
+<body>
+    <!-- Background Glow Effects -->
+    <div class="bg-glow bg-glow-1"></div>
+    <div class="bg-glow bg-glow-2"></div>
+
+    <div class="app-container">
+        <!-- Top Navbar -->
+        <header class="navbar">
+            <div class="nav-brand">
+                <div class="brand-icon">
+                    <i class="fa-solid fa-shield-halved"></i>
+                </div>
+                <div class="brand-text">
+                    <span class="brand-title">Churn<span class="text-accent">Guard</span> <span class="badge-ai">AI</span></span>
+                    <span class="brand-subtitle">Enterprise Customer Retention Intelligence</span>
+                </div>
+            </div>
+
+            <div class="nav-actions">
+                <div class="system-status">
+                    <span class="status-dot pulse"></span>
+                    <span class="status-text">ML Model: <strong>RandomForest v1.0</strong> (Active)</span>
+                </div>
+                <button class="btn btn-secondary btn-sm" id="refreshStatsBtn" title="Refresh Live Data">
+                    <i class="fa-solid fa-arrows-rotate"></i> Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- KPI Metrics Grid -->
+        <section class="kpi-grid">
+            <div class="kpi-card glass-panel">
+                <div class="kpi-icon-wrapper cyan">
+                    <i class="fa-solid fa-users"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Total Analyzed</span>
+                    <h3 class="kpi-value" id="kpiTotal">{{ stats.total_predictions }}</h3>
+                    <span class="kpi-subtext">Customer assessments</span>
+                </div>
+            </div>
+
+            <div class="kpi-card glass-panel">
+                <div class="kpi-icon-wrapper rose">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">High Risk Churners</span>
+                    <h3 class="kpi-value text-rose" id="kpiHighRisk">{{ stats.high_risk_count }}</h3>
+                    <span class="kpi-subtext"><span id="kpiChurnRate">{{ stats.churn_rate }}</span>% predicted churn rate</span>
+                </div>
+            </div>
+
+            <div class="kpi-card glass-panel">
+                <div class="kpi-icon-wrapper amber">
+                    <i class="fa-solid fa-hourglass-half"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Avg. Customer Tenure</span>
+                    <h3 class="kpi-value" id="kpiAvgTenure">{{ stats.avg_tenure }} <span class="unit">mo</span></h3>
+                    <span class="kpi-subtext">Lifetime longevity baseline</span>
+                </div>
+            </div>
+
+            <div class="kpi-card glass-panel">
+                <div class="kpi-icon-wrapper emerald">
+                    <i class="fa-solid fa-dollar-sign"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-label">Avg. Monthly Bill</span>
+                    <h3 class="kpi-value text-emerald" id="kpiAvgCharges">${{ stats.avg_charges }}</h3>
+                    <span class="kpi-subtext">Revenue per customer</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Main Workspace Tabs -->
+        <div class="main-tabs-wrapper">
+            <div class="tabs-header glass-panel">
+                <button class="tab-btn active" data-tab="single-prediction">
+                    <i class="fa-solid fa-bolt"></i> Single Predictor
+                </button>
+                <button class="tab-btn" data-tab="batch-analysis">
+                    <i class="fa-solid fa-file-csv"></i> Batch CSV Upload
+                </button>
+                <button class="tab-btn" data-tab="analytics-view">
+                    <i class="fa-solid fa-chart-pie"></i> Visual Intelligence
+                </button>
+                <button class="tab-btn" data-tab="history-view">
+                    <i class="fa-solid fa-clock-rotate-left"></i> Prediction History
+                </button>
+            </div>
+
+            <!-- TAB 1: SINGLE CUSTOMER PREDICTION -->
+            <div class="tab-content active" id="tab-single-prediction">
+                <div class="predictor-grid">
+                    <!-- Input Form Panel -->
+                    <div class="glass-panel form-panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-sliders text-cyan"></i>
+                                <span>Customer Profile & Subscription Parameters</span>
+                            </div>
+                            <button type="button" class="btn-text" id="btnFillSample">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Load Sample Data
+                            </button>
+                        </div>
+
+                        <form id="singlePredictionForm" class="prediction-form">
+                            {% csrf_token %}
+                            <!-- Section: Account & Identity -->
+                            <div class="form-section-title">
+                                <span>1. Customer Identity & Contract</span>
+                            </div>
+                            <div class="form-row-3">
+                                <div class="form-group">
+                                    <label for="customerID">Customer ID</label>
+                                    <input type="text" id="customerID" name="customerID" placeholder="e.g. CUST-9824" value="CUST-4821">
+                                </div>
+                                <div class="form-group">
+                                    <label for="Contract">Contract Term <span class="required">*</span></label>
+                                    <select id="Contract" name="Contract" required>
+                                        <option value="Month-to-month" selected>Month-to-month</option>
+                                        <option value="One year">One year</option>
+                                        <option value="Two year">Two year</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="PaymentMethod">Payment Method</label>
+                                    <select id="PaymentMethod" name="PaymentMethod">
+                                        <option value="Electronic check" selected>Electronic check</option>
+                                        <option value="Mailed check">Mailed check</option>
+                                        <option value="Bank transfer (automatic)">Bank transfer (automatic)</option>
+                                        <option value="Credit card (automatic)">Credit card (automatic)</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row-3">
+                                <div class="form-group">
+                                    <label for="tenure">Tenure (Months) <span class="required">*</span></label>
+                                    <input type="number" id="tenure" name="tenure" min="0" max="120" value="4" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="MonthlyCharges">Monthly Charges ($) <span class="required">*</span></label>
+                                    <input type="number" step="0.01" id="MonthlyCharges" name="MonthlyCharges" min="0" value="85.50" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="TotalCharges">Total Charges ($)</label>
+                                    <input type="number" step="0.01" id="TotalCharges" name="TotalCharges" placeholder="Auto-calculated">
+                                </div>
+                            </div>
+
+                            <!-- Section: Demographics -->
+                            <div class="form-section-title">
+                                <span>2. Demographics & Household</span>
+                            </div>
+                            <div class="form-row-4">
+                                <div class="form-group">
+                                    <label for="gender">Gender</label>
+                                    <select id="gender" name="gender">
+                                        <option value="Female">Female</option>
+                                        <option value="Male">Male</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="SeniorCitizen">Senior Citizen</label>
+                                    <select id="SeniorCitizen" name="SeniorCitizen">
+                                        <option value="0">No (0)</option>
+                                        <option value="1">Yes (1)</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="Partner">Partner</label>
+                                    <select id="Partner" name="Partner">
+                                        <option value="No">No</option>
+                                        <option value="Yes">Yes</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="Dependents">Dependents</label>
+                                    <select id="Dependents" name="Dependents">
+                                        <option value="No">No</option>
+                                        <option value="Yes">Yes</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- Section: Telecom Services & Security -->
+                            <div class="form-section-title">
+                                <span>3. Subscribed Services & Security Add-ons</span>
+                            </div>
+                            <div class="form-row-3">
+                                <div class="form-group">
+                                    <label for="InternetService">Internet Service</label>
+                                    <select id="InternetService" name="InternetService">
+                                        <option value="Fiber optic" selected>Fiber optic</option>
+                                        <option value="DSL">DSL</option>
+                                        <option value="No">No Internet</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="TechSupport">Tech Support</label>
+                                    <select id="TechSupport" name="TechSupport">
+                                        <option value="No" selected>No</option>
+                                        <option value="Yes">Yes</option>
+                                        <option value="No internet service">No Internet Service</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="OnlineSecurity">Online Security</label>
+                                    <select id="OnlineSecurity" name="OnlineSecurity">
+                                        <option value="No" selected>No</option>
+                                        <option value="Yes">Yes</option>
+                                        <option value="No internet service">No Internet Service</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-row-4">
+                                <div class="form-group">
+                                    <label for="OnlineBackup">Online Backup</label>
+                                    <select id="OnlineBackup" name="OnlineBackup">
+                                        <option value="No">No</option>
+                                        <option value="Yes">Yes</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="DeviceProtection">Device Protection</label>
+                                    <select id="DeviceProtection" name="DeviceProtection">
+                                        <option value="No">No</option>
+                                        <option value="Yes">Yes</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="StreamingTV">Streaming TV</label>
+                                    <select id="StreamingTV" name="StreamingTV">
+                                        <option value="No">No</option>
+                                        <option value="Yes">Yes</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label for="PaperlessBilling">Paperless Billing</label>
+                                    <select id="PaperlessBilling" name="PaperlessBilling">
+                                        <option value="Yes" selected>Yes</option>
+                                        <option value="No">No</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn-primary btn-lg" id="btnPredict">
+                                    <span class="btn-icon"><i class="fa-solid fa-brain"></i></span>
+                                    <span class="btn-text">Predict Churn Risk</span>
+                                    <span class="spinner hidden" id="predictSpinner"></span>
+                                </button>
+                                <button type="reset" class="btn btn-secondary">
+                                    <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Prediction Result Outcome Panel -->
+                    <div class="glass-panel result-panel" id="resultCard">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-chart-simple text-accent"></i>
+                                <span>Prediction Intelligence Outcome</span>
+                            </div>
+                            <span class="badge" id="resultStatusBadge">Awaiting Input</span>
+                        </div>
+
+                        <!-- Empty State Placeholder -->
+                        <div class="result-placeholder" id="resultPlaceholder">
+                            <div class="radar-scan">
+                                <i class="fa-solid fa-satellite-dish"></i>
+                            </div>
+                            <h4>No Prediction Computed Yet</h4>
+                            <p>Configure customer parameters on the left and click <strong>Predict Churn Risk</strong> to generate AI probability & retention insights.</p>
+                        </div>
+
+                        <!-- Live Result Content -->
+                        <div class="result-body hidden" id="resultBody">
+                            <div class="gauge-container">
+                                <div class="gauge-circle" id="gaugeCircle">
+                                    <div class="gauge-inner">
+                                        <span class="gauge-percentage" id="gaugePercentage">0%</span>
+                                        <span class="gauge-label">Churn Probability</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="outcome-alert" id="outcomeAlert">
+                                <div class="outcome-icon" id="outcomeIcon">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                </div>
+                                <div class="outcome-text">
+                                    <h4 id="outcomeTitle">Assessment Computed</h4>
+                                    <p id="outcomeDesc">Customer assessment description</p>
+                                </div>
+                            </div>
+
+                            <!-- Key Risk Drivers & Recommendations -->
+                            <div class="recommendations-box">
+                                <div class="box-title">
+                                    <i class="fa-solid fa-lightbulb text-amber"></i>
+                                    <span>AI Risk Drivers & Action Plan</span>
+                                </div>
+                                <div class="factors-list" id="factorsList">
+                                    <!-- Dynamic factors injected by JS -->
+                                </div>
+                            </div>
+
+                            <div class="quick-meta-grid">
+                                <div class="meta-item">
+                                    <span class="meta-label">Customer ID</span>
+                                    <span class="meta-val" id="resCustomerId">-</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Contract Type</span>
+                                    <span class="meta-val" id="resContract">-</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Monthly Bill</span>
+                                    <span class="meta-val" id="resMonthly">-</span>
+                                </div>
+                                <div class="meta-item">
+                                    <span class="meta-label">Tenure</span>
+                                    <span class="meta-val" id="resTenure">-</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: BATCH CSV UPLOAD -->
+            <div class="tab-content" id="tab-batch-analysis">
+                <div class="glass-panel batch-container">
+                    <div class="batch-header">
+                        <div>
+                            <h2><i class="fa-solid fa-file-csv text-cyan"></i> High-Throughput Batch Inference</h2>
+                            <p>Upload a CSV file containing multiple customer records to evaluate portfolio churn risk simultaneously.</p>
+                        </div>
+                        <a href="{% url 'api-sample-csv' %}" class="btn btn-secondary" download>
+                            <i class="fa-solid fa-download"></i> Download Sample CSV
+                        </a>
+                    </div>
+
+                    <div class="dropzone-area" id="dropzoneArea">
+                        <input type="file" id="batchFileInput" accept=".csv" class="hidden-file-input">
+                        <div class="dropzone-content">
+                            <div class="dropzone-icon">
+                                <i class="fa-solid fa-cloud-arrow-up"></i>
+                            </div>
+                            <h3>Drag & drop your CSV file here</h3>
+                            <p>or click to browse your local filesystem (.csv files supported)</p>
+                            <span class="file-name-badge hidden" id="selectedFileName"></span>
+                        </div>
+                    </div>
+
+                    <div class="batch-action-bar">
+                        <button class="btn btn-primary btn-lg" id="btnUploadBatch" disabled>
+                            <i class="fa-solid fa-bolt"></i> Run Batch Prediction
+                        </button>
+                        <div class="batch-loader hidden" id="batchLoader">
+                            <span class="spinner"></span> Processing records with ML pipeline...
+                        </div>
+                    </div>
+
+                    <!-- Batch Results Section -->
+                    <div class="batch-results hidden" id="batchResultsSection">
+                        <div class="batch-summary-cards">
+                            <div class="summary-chip">
+                                <span>Total Processed:</span>
+                                <strong id="batchTotalCount">0</strong>
+                            </div>
+                            <div class="summary-chip text-rose">
+                                <span>Churn Predicted:</span>
+                                <strong id="batchChurnCount">0</strong>
+                            </div>
+                            <div class="summary-chip text-amber">
+                                <span>Batch Churn Rate:</span>
+                                <strong id="batchChurnRate">0%</strong>
+                            </div>
+                            <div class="summary-chip text-rose">
+                                <span>High Risk:</span>
+                                <strong id="batchHighCount">0</strong>
+                            </div>
+                            <div class="summary-chip text-emerald">
+                                <span>Low Risk:</span>
+                                <strong id="batchLowCount">0</strong>
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="data-table" id="batchResultsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Customer ID</th>
+                                        <th>Contract</th>
+                                        <th>Tenure</th>
+                                        <th>Monthly Bill</th>
+                                        <th>Churn Probability</th>
+                                        <th>Risk Tier</th>
+                                        <th>Predicted Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="batchTableBody">
+                                    <!-- Injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: VISUAL INTELLIGENCE & CHARTS -->
+            <div class="tab-content" id="tab-analytics-view">
+                <div class="charts-grid">
+                    <div class="glass-panel chart-panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-chart-pie text-cyan"></i>
+                                <span>Risk Tier Distribution</span>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="riskDistributionChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="glass-panel chart-panel">
+                        <div class="panel-header">
+                            <div class="panel-title">
+                                <i class="fa-solid fa-chart-column text-indigo"></i>
+                                <span>Churn Breakdown by Contract Type</span>
+                            </div>
+                        </div>
+                        <div class="chart-wrapper">
+                            <canvas id="contractChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 4: PREDICTION AUDIT HISTORY -->
+            <div class="tab-content" id="tab-history-view">
+                <div class="glass-panel history-panel">
+                    <div class="history-toolbar">
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="historySearchInput" placeholder="Search by Customer ID...">
+                        </div>
+                        <div class="filter-group">
+                            <label>Filter Risk:</label>
+                            <select id="historyRiskFilter">
+                                <option value="all">All Risk Levels</option>
+                                <option value="High">High Risk Only</option>
+                                <option value="Medium">Medium Risk Only</option>
+                                <option value="Low">Low Risk Only</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" id="btnReloadHistory">
+                            <i class="fa-solid fa-rotate"></i> Refresh Log
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table" id="historyTable">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Customer ID</th>
+                                    <th>Contract</th>
+                                    <th>Tenure</th>
+                                    <th>Monthly Charges</th>
+                                    <th>Probability</th>
+                                    <th>Risk Level</th>
+                                    <th>Churn Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTableBody">
+                                {% for r in recent_predictions %}
+                                <tr>
+                                    <td>{{ r.created_at|date:"Y-m-d H:i" }}</td>
+                                    <td><strong>{{ r.customer_id }}</strong></td>
+                                    <td>{{ r.contract_type }}</td>
+                                    <td>{{ r.tenure }} mo</td>
+                                    <td>${{ r.monthly_charges|floatformat:2 }}</td>
+                                    <td>{{ r.churn_probability|floatformat:2 }}</td>
+                                    <td>
+                                        {% if r.risk_level == "High" %}
+                                        <span class="badge badge-danger">High Risk</span>
+                                        {% elif r.risk_level == "Medium" %}
+                                        <span class="badge badge-warning">Medium Risk</span>
+                                        {% else %}
+                                        <span class="badge badge-success">Low Risk</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if r.churn_predicted %}
+                                        <span class="status-indicator churned"><i class="fa-solid fa-circle-xmark"></i> Will Churn</span>
+                                        {% else %}
+                                        <span class="status-indicator retained"><i class="fa-solid fa-circle-check"></i> Retained</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center empty-cell">No predictions recorded yet. Run a prediction to see audit history.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>ChurnGuard AI &bull; Intelligent Customer Retention Platform &bull; Powered by Django & Scikit-Learn</p>
+        </footer>
+    </div>
+
+    <!-- Toast Notification Element -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="{% static 'js/dashboard.js' %}"></script>
+</body>
+</html>
