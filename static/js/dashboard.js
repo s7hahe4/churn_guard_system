@@ -2,7 +2,59 @@
  * ChurnGuard AI - Frontend Controller & Data Visualization
  */
 
+// Chart instance references hoisted at module scope
+let riskChartInstance = null;
+let contractChartInstance = null;
+
 document.addEventListener('DOMContentLoaded', () => {
+    // -------------------------------------------------------------
+    // 0. Theme Manager (Light & Dark Mode)
+    // -------------------------------------------------------------
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    let savedTheme = 'dark';
+    try {
+        savedTheme = localStorage.getItem('churnguard_theme') || 'dark';
+    } catch(e) {}
+
+    function applyTheme(theme) {
+        const isLight = (theme === 'light');
+        if (isLight) {
+            document.documentElement.setAttribute('data-theme', 'light');
+            document.body.classList.add('light-theme');
+        } else {
+            document.documentElement.removeAttribute('data-theme');
+            document.body.classList.remove('light-theme');
+        }
+
+        if (themeToggleBtn) {
+            const textEl = themeToggleBtn.querySelector('.theme-text');
+            if (textEl) {
+                textEl.textContent = isLight ? 'Dark Mode' : 'Light Mode';
+            }
+        }
+
+        try {
+            localStorage.setItem('churnguard_theme', theme);
+        } catch(e) {}
+
+        if (riskChartInstance || contractChartInstance) {
+            renderAnalyticsCharts();
+        }
+    }
+
+    // Initialize theme on load
+    applyTheme(savedTheme);
+
+    if (themeToggleBtn) {
+        themeToggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const currentTheme = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            applyTheme(newTheme);
+            showToast(`Switched to ${newTheme === 'light' ? 'Light' : 'Dark'} Mode`, 'info');
+        });
+    }
+
     // -------------------------------------------------------------
     // 1. Tab Switching Logic
     // -------------------------------------------------------------
@@ -345,16 +397,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // -------------------------------------------------------------
     // 6. Visual Intelligence Charts (Chart.js)
     // -------------------------------------------------------------
-    let riskChartInstance = null;
-    let contractChartInstance = null;
-
     async function renderAnalyticsCharts() {
         try {
+            const chartCanvasRisk = document.getElementById('riskDistributionChart');
+            const chartCanvasContract = document.getElementById('contractChart');
+            if (!chartCanvasRisk || !chartCanvasContract) return;
+
             const res = await fetch('/api/stats/');
             const data = await res.json();
 
+            const isLight = document.documentElement.getAttribute('data-theme') === 'light';
+            const textColor = isLight ? '#475569' : '#94a3b8';
+            const gridColor = isLight ? 'rgba(0, 0, 0, 0.07)' : 'rgba(255, 255, 255, 0.05)';
+            const donutBorder = isLight ? '#ffffff' : '#0f172a';
+
             // Doughnut Chart: Risk Distribution
-            const ctxRisk = document.getElementById('riskDistributionChart').getContext('2d');
+            const ctxRisk = chartCanvasRisk.getContext('2d');
             if (riskChartInstance) riskChartInstance.destroy();
 
             riskChartInstance = new Chart(ctxRisk, {
@@ -364,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     datasets: [{
                         data: [data.high_risk, data.medium_risk, data.low_risk],
                         backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'],
-                        borderColor: '#0f172a',
+                        borderColor: donutBorder,
                         borderWidth: 3
                     }]
                 },
@@ -374,14 +432,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     plugins: {
                         legend: {
                             position: 'bottom',
-                            labels: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 12 } }
+                            labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 12 } }
                         }
                     }
                 }
             });
 
             // Bar Chart: Contract Breakdown
-            const ctxContract = document.getElementById('contractChart').getContext('2d');
+            const ctxContract = chartCanvasContract.getContext('2d');
             if (contractChartInstance) contractChartInstance.destroy();
 
             const contractLabels = data.contracts ? data.contracts.map(c => c.contract_type) : ['Month-to-month', 'One year', 'Two year'];
@@ -396,15 +454,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         {
                             label: 'Total Customers',
                             data: contractTotal,
-                            backgroundColor: 'rgba(99, 102, 241, 0.6)',
-                            borderColor: '#6366f1',
+                            backgroundColor: isLight ? 'rgba(79, 70, 229, 0.7)' : 'rgba(99, 102, 241, 0.6)',
+                            borderColor: isLight ? '#4f46e5' : '#6366f1',
                             borderWidth: 1
                         },
                         {
                             label: 'Predicted Churn',
                             data: contractChurn,
-                            backgroundColor: 'rgba(244, 63, 94, 0.8)',
-                            borderColor: '#f43f5e',
+                            backgroundColor: isLight ? 'rgba(225, 29, 72, 0.85)' : 'rgba(244, 63, 94, 0.8)',
+                            borderColor: isLight ? '#e11d48' : '#f43f5e',
                             borderWidth: 1
                         }
                     ]
@@ -413,13 +471,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     responsive: true,
                     maintainAspectRatio: false,
                     scales: {
-                        x: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        y: { ticks: { color: '#94a3b8' }, grid: { color: 'rgba(255,255,255,0.05)' } }
+                        x: { ticks: { color: textColor }, grid: { color: gridColor } },
+                        y: { ticks: { color: textColor }, grid: { color: gridColor } }
                     },
                     plugins: {
                         legend: {
                             position: 'bottom',
-                            labels: { color: '#94a3b8', font: { family: 'Plus Jakarta Sans', size: 12 } }
+                            labels: { color: textColor, font: { family: 'Plus Jakarta Sans', size: 12 } }
                         }
                     }
                 }
