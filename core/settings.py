@@ -21,7 +21,13 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
+ALLOWED_HOSTS = ['*']
+raw_hosts = os.getenv('ALLOWED_HOSTS', '').split(',')
+for h in raw_hosts:
+    clean = h.strip().replace('https://', '').replace('http://', '').split('/')[0]
+    if clean and clean not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(clean)
+ALLOWED_HOSTS.extend(['.onrender.com', '.ondigitalocean.app', 'localhost', '127.0.0.1'])
 
 
 # Application definition
@@ -155,3 +161,30 @@ CELERY_TASK_PUBLISH_RETRY = False
 if 'test' in sys.argv:
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = True
+
+# Production Console Logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'ERROR',
+            'propagate': True,
+        },
+    },
+}
