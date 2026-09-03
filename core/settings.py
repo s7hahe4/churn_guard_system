@@ -125,6 +125,8 @@ STORAGES = {
     },
 }
 
+WHITENOISE_MANIFEST_STRICT = False
+
 # CSRF Trusted Origins for Cloud Platforms
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
