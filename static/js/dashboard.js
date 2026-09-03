@@ -79,6 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btn.getAttribute('data-tab') === 'history-view') {
                 fetchPredictionHistory();
             }
+            if (btn.getAttribute('data-tab') === 'registry-view') {
+                fetchModelRegistry();
+            }
         });
     });
 
@@ -257,20 +260,43 @@ document.addEventListener('DOMContentLoaded', () => {
             outcomeDesc.textContent = `Low churn probability detected. Subscriber engagement patterns indicate retention stability.`;
         }
 
-        // Render Factors & Recommendations
+        // Render Factors & Recommendations (Supports TreeSHAP & Legacy)
         factorsList.innerHTML = '';
         if (res.risk_factors && res.risk_factors.length > 0) {
             res.risk_factors.forEach(f => {
                 const item = document.createElement('div');
-                const levelClass = f.impact.toLowerCase().includes('high') ? '' : (f.impact.toLowerCase().includes('medium') ? 'medium' : 'low');
-                item.className = `factor-item ${levelClass}`;
-                item.innerHTML = `
-                    <div class="factor-header">
-                        <span>${f.factor}</span>
-                        <span>${f.impact}</span>
-                    </div>
-                    <div class="factor-detail">${f.detail}</div>
-                `;
+                
+                if (f.is_shap || typeof f.shap_value === 'number') {
+                    // Modern TreeSHAP Directional Feature Attribution
+                    const isIncrease = f.shap_value >= 0;
+                    const containerClass = isIncrease ? 'risk-increase' : 'risk-decrease';
+                    const sign = isIncrease ? '+' : '';
+                    const tagClass = isIncrease ? 'positive' : 'negative';
+                    const barWidth = Math.min(100, Math.max(15, Math.abs(f.shap_value) * 80));
+
+                    item.className = `factor-item shap-item ${containerClass}`;
+                    item.innerHTML = `
+                        <div class="shap-meta-row">
+                            <span>${f.factor}</span>
+                            <span class="shap-value-tag ${tagClass}">${sign}${f.shap_value.toFixed(4)}</span>
+                        </div>
+                        <div class="shap-bar-track">
+                            <div class="shap-bar-fill ${tagClass}" style="width: ${barWidth}%;"></div>
+                        </div>
+                        <div class="factor-detail">${f.detail}</div>
+                    `;
+                } else {
+                    // Legacy Heuristic Format
+                    const levelClass = f.impact.toLowerCase().includes('high') ? '' : (f.impact.toLowerCase().includes('medium') ? 'medium' : 'low');
+                    item.className = `factor-item ${levelClass}`;
+                    item.innerHTML = `
+                        <div class="factor-header">
+                            <span>${f.factor}</span>
+                            <span>${f.impact}</span>
+                        </div>
+                        <div class="factor-detail">${f.detail}</div>
+                    `;
+                }
                 factorsList.appendChild(item);
             });
         } else {
@@ -285,17 +311,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // -------------------------------------------------------------
-    // 5. Batch CSV Upload Handling
+    // 5. Batch CSV Upload Handling & Celery Async Polling
     // -------------------------------------------------------------
     const dropzone = document.getElementById('dropzoneArea');
     const fileInput = document.getElementById('batchFileInput');
     const selectedFileName = document.getElementById('selectedFileName');
     const btnUploadBatch = document.getElementById('btnUploadBatch');
-    const batchLoader = document.getElementById('batchLoader');
+    const batchProgressWrapper = document.getElementById('batchProgressWrapper');
+    const batchProgressBar = document.getElementById('batchProgressBar');
+    const batchProgressPct = document.getElementById('batchProgressPct');
+    const batchProgressLabel = document.getElementById('batchProgressLabel');
     const batchResultsSection = document.getElementById('batchResultsSection');
     const batchTableBody = document.getElementById('batchTableBody');
 
     let selectedFile = null;
+    let batchPollInterval = null;
 
     dropzone.addEventListener('click', () => fileInput.click());
 
@@ -335,7 +365,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!selectedFile) return;
 
         btnUploadBatch.disabled = true;
-        batchLoader.classList.remove('hidden');
+        batchResultsSection.classList.add('hidden');
+        batchProgressWrapper.classList.remove('hidden');
+        batchProgressBar.style.width = '10%';
+        batchProgressPct.textContent = '10%';
+        batchProgressLabel.innerHTML = '<i class="fa-solid fa-gear fa-spin"></i> Submitting batch to Celery async queue...';
 
         const formData = new FormData();
         formData.append('file', selectedFile);
@@ -351,19 +385,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const data = await response.json();
             if (!response.ok) {
-                throw new Error(data.error || 'Batch processing failed.');
+                throw new Error(data.error || 'Batch submission failed.');
             }
 
-            renderBatchResults(data);
-            showToast(`Batch processing complete! ${data.total_records} records evaluated.`, 'success');
-            refreshGlobalStats();
+            if (data.status === 'COMPLETED') {
+                // Was processed synchronously
+                batchProgressBar.style.width = '100%';
+                batchProgressPct.textContent = '100%';
+                setTimeout(() => {
+                    batchProgressWrapper.classList.add('hidden');
+                    btnUploadBatch.disabled = false;
+                }, 500);
+                // Fetch full job data
+                const statusRes = await fetch(`/api/batch-status/${data.job_id}/`);
+                const fullJobData = await statusRes.json();
+                renderBatchResults(fullJobData);
+                showToast(`Batch processing complete! ${fullJobData.total_records} records evaluated.`, 'success');
+                refreshGlobalStats();
+            } else {
+                // Async processing via Celery — poll status endpoint
+                pollBatchJob(data.job_id);
+            }
         } catch (err) {
-            showToast(`Batch error: ${err.message}`, 'error');
-        } finally {
+            batchProgressWrapper.classList.add('hidden');
             btnUploadBatch.disabled = false;
-            batchLoader.classList.add('hidden');
+            showToast(`Batch error: ${err.message}`, 'error');
         }
     });
+
+    function pollBatchJob(jobId) {
+        if (batchPollInterval) clearInterval(batchPollInterval);
+
+        batchPollInterval = setInterval(async () => {
+            try {
+                const res = await fetch(`/api/batch-status/${jobId}/`);
+                const job = await res.json();
+
+                const pct = job.progress_percentage || 0;
+                batchProgressBar.style.width = `${pct}%`;
+                batchProgressPct.textContent = `${pct}%`;
+
+                if (job.status === 'PROCESSING') {
+                    batchProgressLabel.innerHTML = `<i class="fa-solid fa-brain fa-spin"></i> Scoring batch with ML pipeline (${pct}%)...`;
+                } else if (job.status === 'COMPLETED') {
+                    clearInterval(batchPollInterval);
+                    batchProgressBar.style.width = '100%';
+                    batchProgressPct.textContent = '100%';
+                    batchProgressLabel.innerHTML = `<i class="fa-solid fa-circle-check text-emerald"></i> Batch complete!`;
+                    
+                    setTimeout(() => {
+                        batchProgressWrapper.classList.add('hidden');
+                        btnUploadBatch.disabled = false;
+                    }, 600);
+
+                    renderBatchResults(job);
+                    showToast(`Batch finished! ${job.total_records} records scored.`, 'success');
+                    refreshGlobalStats();
+                } else if (job.status === 'FAILED') {
+                    clearInterval(batchPollInterval);
+                    batchProgressWrapper.classList.add('hidden');
+                    btnUploadBatch.disabled = false;
+                    showToast(`Batch failed: ${job.error_message || 'Unknown error'}`, 'error');
+                }
+            } catch (e) {
+                console.error('Polling error:', e);
+            }
+        }, 1200);
+    }
 
     function renderBatchResults(data) {
         batchResultsSection.classList.remove('hidden');
@@ -543,7 +631,90 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // -------------------------------------------------------------
-    // 8. Live Global Stats Refresh
+    // 8. Model Registry & Benchmark Controller
+    // -------------------------------------------------------------
+    const registryTableBody = document.getElementById('registryTableBody');
+    const btnRefreshRegistry = document.getElementById('btnRefreshRegistry');
+
+    async function fetchModelRegistry() {
+        if (!registryTableBody) return;
+        try {
+            const res = await fetch('/api/models/');
+            const data = await res.json();
+
+            registryTableBody.innerHTML = '';
+            if (data.length === 0) {
+                registryTableBody.innerHTML = `<tr><td colspan="9" class="text-center empty-cell">No registered models found. Run ml_engine/train.py to train and register models.</td></tr>`;
+                return;
+            }
+
+            data.forEach(m => {
+                const tr = document.createElement('tr');
+                const actionCell = m.is_active
+                    ? `<span class="badge-active-model"><i class="fa-solid fa-circle-check"></i> Production Active</span>`
+                    : `<button class="btn-activate" data-id="${m.id}" data-name="${m.name}" data-auc="${m.roc_auc}"><i class="fa-solid fa-bolt"></i> Deploy Model</button>`;
+
+                tr.innerHTML = `
+                    <td><strong>${m.name}</strong></td>
+                    <td><span class="badge">${m.algorithm}</span></td>
+                    <td>${m.imbalance_strategy}</td>
+                    <td><strong>${m.roc_auc.toFixed(4)}</strong></td>
+                    <td>${m.pr_auc.toFixed(4)}</td>
+                    <td>${m.f1_churn.toFixed(4)}</td>
+                    <td>${(m.recall_churn * 100).toFixed(1)}%</td>
+                    <td>${m.trained_at_formatted}</td>
+                    <td>${actionCell}</td>
+                `;
+                registryTableBody.appendChild(tr);
+            });
+
+            // Attach activation click handlers
+            registryTableBody.querySelectorAll('.btn-activate').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const id = btn.getAttribute('data-id');
+                    const modelName = btn.getAttribute('data-name');
+                    const modelAuc = btn.getAttribute('data-auc');
+                    btn.disabled = true;
+                    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Activating...`;
+
+                    try {
+                        const actRes = await fetch(`/api/models/${id}/activate/`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': getCookie('csrftoken') || ''
+                            }
+                        });
+                        const actData = await actRes.json();
+                        if (actRes.ok) {
+                            showToast(`Active model switched to ${modelName}!`, 'success');
+                            // Update navbar display
+                            const navName = document.getElementById('navActiveModelName');
+                            const navMetric = document.getElementById('navActiveModelMetric');
+                            if (navName) navName.textContent = modelName;
+                            if (navMetric) navMetric.textContent = `ROC-AUC: ${modelAuc}`;
+                            fetchModelRegistry();
+                        } else {
+                            showToast(`Activation failed: ${actData.error || 'Unknown error'}`, 'error');
+                        }
+                    } catch (err) {
+                        showToast(`Activation error: ${err.message}`, 'error');
+                    }
+                });
+            });
+        } catch (e) {
+            console.error('Error loading model registry:', e);
+        }
+    }
+
+    if (btnRefreshRegistry) {
+        btnRefreshRegistry.addEventListener('click', () => {
+            fetchModelRegistry();
+            showToast('Model registry refreshed.', 'info');
+        });
+    }
+
+    // -------------------------------------------------------------
+    // 9. Live Global Stats Refresh
     // -------------------------------------------------------------
     const refreshStatsBtn = document.getElementById('refreshStatsBtn');
     if (refreshStatsBtn) {

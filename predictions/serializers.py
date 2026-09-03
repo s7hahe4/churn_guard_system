@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import PredictionRecord, BatchUploadJob
+from .models import PredictionRecord, BatchUploadJob, ModelVersion
+
 
 class CustomerDataSerializer(serializers.Serializer):
     customerID = serializers.CharField(max_length=50, required=False, default="Anonymous")
@@ -35,6 +36,7 @@ class CustomerDataSerializer(serializers.Serializer):
 
 class PredictionRecordSerializer(serializers.ModelSerializer):
     created_at_formatted = serializers.DateTimeField(source='created_at', format='%Y-%m-%d %H:%M', read_only=True)
+    model_name = serializers.CharField(source='model_version.name', read_only=True, default="Baseline")
 
     class Meta:
         model = PredictionRecord
@@ -47,6 +49,47 @@ class PredictionRecordSerializer(serializers.ModelSerializer):
             'churn_probability',
             'risk_level',
             'churn_predicted',
+            'model_version',
+            'model_name',
             'created_at',
             'created_at_formatted'
-        ]
+        ]
+
+
+class ModelVersionSerializer(serializers.ModelSerializer):
+    trained_at_formatted = serializers.DateTimeField(source='trained_at', format='%Y-%m-%d %H:%M', read_only=True)
+
+    class Meta:
+        model = ModelVersion
+        fields = [
+            'id',
+            'name',
+            'algorithm',
+            'version',
+            'is_active',
+            'accuracy',
+            'roc_auc',
+            'pr_auc',
+            'f1_churn',
+            'precision_churn',
+            'recall_churn',
+            'imbalance_strategy',
+            'dataset_rows',
+            'trained_at_formatted'
+        ]
+
+
+class BatchJobStatusSerializer(serializers.ModelSerializer):
+    uploaded_at_formatted = serializers.DateTimeField(source='uploaded_at', format='%Y-%m-%d %H:%M', read_only=True)
+
+    class Meta:
+        model = BatchUploadJob
+        fields = [
+            'id',
+            'status',
+            'progress_percentage',
+            'total_records',
+            'churn_detected_count',
+            'error_message',
+            'uploaded_at_formatted'
+        ]

@@ -48,7 +48,7 @@
             <div class="nav-actions">
                 <div class="system-status">
                     <span class="status-dot pulse"></span>
-                    <span class="status-text">ML Model: <strong>RandomForest v1.0</strong> (Active)</span>
+                    <span class="status-text">Active Model: <strong id="navActiveModelName">{{ active_model.name }}</strong> (<span id="navActiveModelMetric">ROC-AUC: {{ active_model.roc_auc }}</span>)</span>
                 </div>
                 <button class="btn btn-secondary btn-sm theme-toggle-btn" id="themeToggleBtn" title="Toggle Light/Dark Theme" aria-label="Toggle Theme">
                     <i class="fa-solid fa-sun icon-sun"></i>
@@ -122,6 +122,9 @@
                 </button>
                 <button class="tab-btn" data-tab="history-view">
                     <i class="fa-solid fa-clock-rotate-left"></i> Prediction History
+                </button>
+                <button class="tab-btn" data-tab="registry-view">
+                    <i class="fa-solid fa-server"></i> Model Registry
                 </button>
             </div>
 
@@ -335,14 +338,21 @@
                                 </div>
                             </div>
 
-                            <!-- Key Risk Drivers & Recommendations -->
+                            <!-- TreeSHAP Feature Attribution & Action Plan -->
                             <div class="recommendations-box">
                                 <div class="box-title">
-                                    <i class="fa-solid fa-lightbulb text-amber"></i>
-                                    <span>AI Risk Drivers & Action Plan</span>
+                                    <div class="title-left">
+                                        <i class="fa-solid fa-scale-balanced text-cyan"></i>
+                                        <span>TreeSHAP Feature Attribution</span>
+                                    </div>
+                                    <span class="badge-shap-pill"><i class="fa-solid fa-brain"></i> Exact Shapley Values</span>
+                                </div>
+                                <div class="shap-legend">
+                                    <span class="legend-item"><span class="legend-bar-indicator red"></span> Increases Churn Risk</span>
+                                    <span class="legend-item"><span class="legend-bar-indicator green"></span> Reduces Churn Risk (Protective)</span>
                                 </div>
                                 <div class="factors-list" id="factorsList">
-                                    <!-- Dynamic factors injected by JS -->
+                                    <!-- Dynamic SHAP factors injected by JS -->
                                 </div>
                             </div>
 
@@ -398,8 +408,14 @@
                         <button class="btn btn-primary btn-lg" id="btnUploadBatch" disabled>
                             <i class="fa-solid fa-bolt"></i> Run Batch Prediction
                         </button>
-                        <div class="batch-loader hidden" id="batchLoader">
-                            <span class="spinner"></span> Processing records with ML pipeline...
+                        <div class="batch-progress-wrapper hidden" id="batchProgressWrapper">
+                            <div class="progress-info">
+                                <span id="batchProgressLabel"><i class="fa-solid fa-gear fa-spin"></i> Processing batch via Celery async worker...</span>
+                                <strong id="batchProgressPct">0%</strong>
+                            </div>
+                            <div class="progress-track">
+                                <div class="progress-fill" id="batchProgressBar" style="width: 0%;"></div>
+                            </div>
                         </div>
                     </div>
 
@@ -546,6 +562,42 @@
                                     <td colspan="8" class="text-center empty-cell">No predictions recorded yet. Run a prediction to see audit history.</td>
                                 </tr>
                                 {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 5: MODEL REGISTRY & BENCHMARKS -->
+            <div class="tab-content" id="tab-registry-view">
+                <div class="glass-panel registry-panel">
+                    <div class="panel-header">
+                        <div>
+                            <h2><i class="fa-solid fa-server text-cyan"></i> ML Production Model Registry</h2>
+                            <p>Trained model versions, evaluation benchmarks on held-out test sets, and atomic one-click production model switching.</p>
+                        </div>
+                        <button class="btn btn-secondary btn-sm" id="btnRefreshRegistry">
+                            <i class="fa-solid fa-rotate"></i> Refresh Registry
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="data-table" id="registryTable">
+                            <thead>
+                                <tr>
+                                    <th>Model Name</th>
+                                    <th>Algorithm</th>
+                                    <th>Imbalance Strategy</th>
+                                    <th>ROC-AUC</th>
+                                    <th>PR-AUC</th>
+                                    <th>F1 (Churn)</th>
+                                    <th>Recall (Churn)</th>
+                                    <th>Trained At</th>
+                                    <th>Production Deployment</th>
+                                </tr>
+                            </thead>
+                            <tbody id="registryTableBody">
+                                <!-- Injected via JS -->
                             </tbody>
                         </table>
                     </div>

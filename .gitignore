@@ -1,0 +1,31 @@
+# Environment & Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environment
+venv/
+.venv/
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+media/
+
+# ML Artifacts (large binary files)
+ml_engine/saved_models/*.joblib
+ml_engine/data/*.csv
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
