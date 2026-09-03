@@ -11,6 +11,14 @@ ChurnGuard AI is an enterprise customer churn intelligence platform built with *
 
 ---
 
+## Visual Proof Points
+
+| TreeSHAP Feature Attribution | Model Registry & Benchmarks |
+| :---: | :---: |
+| ![TreeSHAP Explainability](assets/screenshots/treeshap_feature_attributions.png) | ![Model Registry](assets/screenshots/model_registry_benchmarks.png) |
+
+---
+
 ## Key Features
 
 1. **True TreeSHAP Model Interpretability**:
