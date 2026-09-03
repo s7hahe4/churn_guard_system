@@ -23,8 +23,11 @@ try:
     print("==> Running database migrations on boot (wsgi)...")
     call_command('migrate', interactive=False)
     print("==> Database migrations ready.")
+    print("==> Collecting static assets (wsgi)...")
+    call_command('collectstatic', interactive=False, verbosity=0)
+    print("==> Static assets collected.")
 except Exception as e:
-    print(f"==> Startup migration note: {e}")
+    print(f"==> Startup migration/static note: {e}")
 
 # Check if model version exists; if not, train baseline model
 try:
