@@ -15,6 +15,7 @@ venv/
 db.sqlite3
 db.sqlite3-journal
 media/
+staticfiles/
 
 # ML Artifacts (large binary files)
 ml_engine/saved_models/*.joblib

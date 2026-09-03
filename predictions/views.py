@@ -22,6 +22,9 @@ import socket
 
 def is_celery_broker_reachable(timeout: float = 0.15) -> bool:
     """Fast check to verify if the Celery message broker (Redis) is actively listening."""
+    from django.conf import settings
+    if getattr(settings, 'CELERY_TASK_ALWAYS_EAGER', False):
+        return True
     try:
         sock = socket.create_connection(('127.0.0.1', 6379), timeout=timeout)
         sock.close()
